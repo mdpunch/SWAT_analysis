@@ -13,14 +13,14 @@ Reads through the Subarray and Telescope files for the ObsID, and creates:
     - `deltaT_ns delta_evt# busy_status(0/1) event_num T_now_ns`:20}\n")`
 * Coincidence time files with name `{obsid}_times.txt.gz` with lines
     - \#chan chars, with `.` if telescope not hit, and `n` for the last char of the deltaT to the 1st telescope hit
-* Coincidence string files with name `{obsid}_strings.txt.gz` with lines
+* Coincidence string files with name `{obsid}_strings_calib_{calib}.txt.gz` with lines
     - \#chan chars, with `.` if telescope not hit, and `c` for the char `ord('a')+deltaT/t_step` to the 1st telescope hit  
     where `t_step` is the step of the TATS.
 * If `calib` is `0`, then it makes calibration pickle file with name `{obsid}_calibs.pickle`,   
   which contains the average deltaT from chan_0 for the other channels for events where all telescopes are hit
     - This file can be shown easily with `./show_calibs.py {obsid}_calibs.pickle`
 * If `calib` is `>0`, then the corresponding `{calib}_calibs.pickle` file is applied to the times
- 
+
 The latter strings/times are reordered from the channels as seen by the SWAT, to be in TATS order.
 
 This reordering is determined at runtime, by setting only one channel in TATS, and seeing which channel is seen in SWAT (or just `tcpdump`, show which channels are active).
@@ -33,6 +33,9 @@ For example, this gives:
 
 key_to_order = { 27:0, 25:1, 23:2, 22:3, 20:4, 21:5, 26:6, 24:7 }
 ```
+
+*Note:* The calibration from one obs_id was applied to another obs_id with simultaneous telescopes, to check that the calibration was working!
+ 
 
 ## Plot_Deltas
 
