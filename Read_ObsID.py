@@ -17,6 +17,41 @@
 # # Look into SWAT test files
 
 # %%
+# 51 is all a's
+# 61,71,81 is all a's, but high rate and few?
+
+import sys
+if  not hasattr(sys, 'ps1'):
+
+    import argparse
+    parser = argparse.ArgumentParser("Read the SWAT file and produce outputs")
+    
+    parser.add_argument('-o', '--obs-id', help="Observation ID to read")
+    parser.add_argument('-c', '--calib', default=0, type=int, help="Apply calibration pickle file with name {calib}_calibs.pickle\n"
+                                                                   "Default 0, to make calibration file from events with all telescopes hit")
+    args = parser.parse_args()
+
+    if args.obs_id:
+        obsid =args.obs_id
+    else:
+        print("Need obsid!!!")
+        sys.exit()
+    
+    calib = args.calib
+
+else:
+    obsid = 51 # 1301 # 97 # 92 # 1003 # 1004 # 1005
+    calib = 0
+
+# %%
+import pickle
+import pprint
+if calib>0:
+    with open(f"{obsid}_calibs.pickle", 'rb') as handle:
+        cal = pickle.load(handle)
+    pprint.pprint(cal)
+
+# %%
 import numpy as np
 
 # %%
@@ -70,13 +105,6 @@ def get_files_for_obsid(obsid):
 # ## Look in the files
 
 # %%
-obsid = 1301
-obsid = 1201
-obsid = 1005
-obsid = 97
-#obsid = 81
-
-# %%
 obsid_subarray,obsid_tel = get_files_for_obsid(obsid)
 
 # %%
@@ -99,22 +127,23 @@ len(f_sub.SubarrayEvents),len(f_tel.Triggers)
 f_sub.SubarrayEvents[1],list(f_tel.Triggers[0:1010])
 
 # %%
-# Looking at outputs, SWAT takes some time to connect to all...
-f_tel = File(obsid_tel[0])
-f_sub = File(obsid_subarray[0])
-prev_sub_tel_ids = []
-prev_s,prev_qns = 0,0
-for sub in f_sub.SubarrayEvents[:10000]:
-    if (len(sub.tel_ids) != len(prev_sub_tel_ids) or
-        set(sub.tel_ids) != set(prev_sub_tel_ids)):
-        print(sub.event_id,"Subarray tel_ids",sub.event_time_s,sub.event_time_qns,"time",sub.tel_ids)
-        differ = set(sub.tel_ids.astype(int))-set(prev_sub_tel_ids)
+if  hasattr(sys, 'ps1'):
+    # Looking at outputs, SWAT takes some time to connect to all...
+    f_tel = File(obsid_tel[0])
+    f_sub = File(obsid_subarray[0])
+    prev_sub_tel_ids = []
+    prev_s,prev_qns = 0,0
+    for sub in f_sub.SubarrayEvents[:10000]:
+        if (len(sub.tel_ids) != len(prev_sub_tel_ids) or
+            set(sub.tel_ids) != set(prev_sub_tel_ids)):
+            print(sub.event_id,"Subarray tel_ids",sub.event_time_s,sub.event_time_qns,"time",sub.tel_ids)
+            differ = set(sub.tel_ids.astype(int))-set(prev_sub_tel_ids)
+            difftimes = (sub.event_time_s-prev_s)*1_000_000_000 + (sub.event_time_qns-prev_qns)//4
+            print("  event difference", np.array(list(differ)),"times",difftimes)
+            prev_sub_tel_ids = sub.tel_ids.astype(int)
         difftimes = (sub.event_time_s-prev_s)*1_000_000_000 + (sub.event_time_qns-prev_qns)//4
-        print("  event difference", np.array(list(differ)),"times",difftimes)
-        prev_sub_tel_ids = sub.tel_ids.astype(int)
-    difftimes = (sub.event_time_s-prev_s)*1_000_000_000 + (sub.event_time_qns-prev_qns)//4
-    print("  time difference",difftimes)
-    prev_s,prev_qns = sub.event_time_s,sub.event_time_qns
+        print("  time difference",difftimes)
+        prev_s,prev_qns = sub.event_time_s,sub.event_time_qns
 
 
 # %%
@@ -146,22 +175,9 @@ key_to_order = { 27:0, 25:1, 23:2, 22:3, 20:4, 21:5, 26:6, 24:7 }
 
 
 # %%
-# 51 is all a's
-# 61,71,81 is all a's, but high rate and few?
-
-import sys
-if  not hasattr(sys, 'ps1'):
-    print(sys.argv)
-    # assume last argument is obsid
-    obsid = sys.argv[-1]
-else:
-    obsid = 51 # 1301 # 97 # 92 # 1003 # 1004 # 1005
-
-# %%
 import gzip
 file_times = gzip.open(f"{obsid}_times.txt.gz", "wt")
-file_strings = gzip.open(f"{obsid}_strings.txt.gz", "wt")
-calib = True
+file_strings = gzip.open(f"{obsid}_strings_calib_{calib}.txt.gz", "wt")
 
 obsid_subarray,obsid_tel = get_files_for_obsid(obsid)
 
@@ -172,7 +188,7 @@ print(ft,fs)
 # In the SubarrayEvents, there is the trigger_ids, tel_ids.
 #  Run through those for an event, then go through the tels, to get the times.
 
-i = 0
+n_line = 0
 sub_gen = f_sub.SubarrayEvents
 tel_gen = f_tel.Triggers
 
@@ -273,12 +289,38 @@ while True:
             tel_gen = f_tel.Triggers
             tel = next(tel_gen)
 
+    # Sort by channel
     sub_times = dict(sorted(sub_times.items()))
+    
+    
+    # get differences and convert from quarter_ns to ns
     min_times = min(sub_times.values())
     for key in sub_times.keys():
         sub_times[key] -= min_times
         sub_times[key] //= 4
     #print(sub_times)
+
+    min_chan = min(sub_times, key=sub_times.get)
+
+    if calib>0:
+        #print("<<<")
+        #pprint.pprint(sub_times)
+        # Run through excluding 1st channel (but that shouldn't make a difference if included)
+        for key in list(sub_times.keys())[1:]:
+            sub_times[key] -= cal[key] - cal[min_chan] 
+        #print(">>>")
+        #pprint.pprint(sub_times)
+ 
+    # re-do get differences
+    min_times = min(sub_times.values())
+    for key in sub_times.keys():
+        sub_times[key] -= min_times
+
+    if calib>0:
+        #print("===")
+        #pprint.pprint(sub_times)
+        pass
+
     
     '''
     if max(sub_times.values())>9:
@@ -303,7 +345,7 @@ while True:
     for key in sub_times.keys():
         t_step = 2.5
         # 2.5ns spacing between deltaTs of TATS?
-        lts[key_to_order[key]] = chr(ord_a + np.round(sub_times[key]/t_step).astype('int'))  
+        lts[key_to_order[key]] = chr(ord_a + np.floor_divide(sub_times[key],t_step).astype('int'))  
     trig_str = "".join(lts)
     
     #print(trig_str)
@@ -311,31 +353,29 @@ while True:
 
     # Try doing calibration w.r.t. 0th channel
     zeroth_chan = list(sub_times.keys())[0]
-    if calib:
+    if calib==0:
         if len(sub_times)==8:
             for key in sub_times.keys():
                 calibs[key] = calibs.get(key, 0) + sub_times[key]-sub_times[zeroth_chan]
             n_calibs += 1
     
-    if i<10000:
+    if n_line<10000:
         print(trig_str)
-    elif i%100_000==0:
-        print(trig_str,i)
-    elif i>1000_000_000:
+    elif n_line%100_000==0:
+        print(trig_str,n_line)
+    elif n_line>1_000_000_000:
         break
     #print(80*"-")
-    i += 1
+    n_line += 1
 
 # %%
-if calib:
-    cal = {k:v/n_calibs for k,v in calibs.items()}
-    print(n_calibs,cal)
 
 # %%
 import pickle
-
-# %%
-with open(f"{obsid}_calibs.pickle", 'wb') as handle:
-    pickle.dump(cal, handle, protocol=pickle.HIGHEST_PROTOCOL)
+if calib==0:
+    cal = {k:v/n_calibs for k,v in calibs.items()}
+    print(n_calibs,cal)
+    with open(f"{obsid}_calibs.pickle", 'wb') as handle:
+        pickle.dump(cal, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 # %%
