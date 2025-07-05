@@ -199,12 +199,7 @@ while True:
         print("Nextsubarray file:",next_subarray)
         f_sub = File(next_subarray)
         sub_gen = f_sub.SubarrayEvents
-        sub = next(sub_gen)
-
-        # DEBUG
-        print(sub)
-        
-
+        sub = next(sub_gen)        
     
     #print(sub)
     sub_tel_ids=sub.tel_ids
@@ -342,17 +337,5 @@ import pickle
 # %%
 with open(f"{obsid}_calibs.pickle", 'wb') as handle:
     pickle.dump(cal, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-# %%
-cal
-
-# %%
-tel
-
-# %%
-sys.getsizeof(tel)
-
-# %%
-356/24
 
 # %%

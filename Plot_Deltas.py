@@ -39,13 +39,6 @@ hasattr(sys, 'ps1')
 # %%
 
 # %%
-import ast
-str(str(10000))
-
-# %%
-type(ast.literal_eval(str(100000)))
-
-# %%
 if not hasattr(sys, 'ps1'):
     
     import argparse
