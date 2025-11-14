@@ -37,6 +37,7 @@ plt.rcParams.update({'font.size': 16})
 hasattr(sys, 'ps1')
 
 # %%
+import ast
 
 # %%
 if not hasattr(sys, 'ps1'):
@@ -63,7 +64,7 @@ if not hasattr(sys, 'ps1'):
     if args.obs_id and args.channel:
         obsid = args.obs_id
         tel = args.channel
-        fname = fname = f"{obsid}_tel_{tel}.intervals.gz"
+        fname = fname = f"outputs/{obsid}_tel_{tel}.intervals.gz"
     else:
         fname = args.file
     pltrange = ast.literal_eval(args.range)
@@ -89,9 +90,9 @@ if not hasattr(sys, 'ps1'):
     
 else:
 
-    obsid = 61
-    tel = 20
-    fname = f"{obsid}_tel_{tel}.intervals.gz"
+    obsid = 91
+    tel = 25
+    fname = f"outputs/{obsid}_tel_{tel}.intervals.gz"
     pltrange = [0,20000]
     log = True
     newtitle = f"ObsID {obsid} Telescope {tel}"
@@ -174,7 +175,7 @@ plt.plot(numrange[0]+np.array(range(len(t1000s)-1))*1000,(t1000s[1:]-t1000s[:-1]
 plt.ylabel("Rate (Hz)")
 plt.xlabel("Event numbers")
 plt.yscale("log")
-plt.savefig(f"{obsid}_tel_{tel}_{numrange}_rates.png")
+plt.savefig(f"outputs/{obsid}_tel_{tel}_{numrange}_rates.png")
 plt.show()
 
 # %%
@@ -244,7 +245,7 @@ print(f"Rate: {(1/popt[1]):.1f} Hz")
 
 plt.yscale('log')
 
-plt.savefig(f"{obsid}_tel_{tel}_{numrange}_deltas.png")
+plt.savefig(f"outputs/{obsid}_tel_{tel}_{numrange}_deltas.png")
 
 plt.show()
 
@@ -253,6 +254,10 @@ Delta
 
 # %%
 Deltas[:,1]
+
+# %%
+print(num_lost:=np.sum(Deltas[:,1]-1),"events lost out of ",num_evts:=np.sum(Deltas[:,1]),
+      f"so {100*num_lost/num_evts:.2f}%")
 
 # %%
 
@@ -266,6 +271,5 @@ plt.show()
 h[0]
 
 # %%
-print(np.sum(Deltas[:,1]-1),"events lost out of ",np.sum(Deltas[:,1]))
 
 # %%

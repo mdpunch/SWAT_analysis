@@ -18,6 +18,8 @@ MC = "MC_8MSTs_Proton_with_mono_lapalma.txt"
 MCo =  "MC_8MSTs_Proton_with_mono_removed_lapalma.txt"
 MC = "MC_8MSTs_Gamma_spec_2.7_with_mono_lapalma.txt"
 MCo = "MC_8MSTs_Gamma_spec_2.7_with_mono_removed_lapalma.txt"
+MC = "MC_4LSTs_4MSTs_Gamma_spec_2.7_with_mono_lapalma.txt"
+MCo = "MC_4LSTs_4MSTs_Gamma_spec_2.7_with_mono_removed_lapalma.txt"
 MC_file = open(MC,"r")
 MC_out = open(MCo,"wt")
 

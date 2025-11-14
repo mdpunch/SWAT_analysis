@@ -40,14 +40,14 @@ if  not hasattr(sys, 'ps1'):
     calib = args.calib
 
 else:
-    obsid = 51 # 1301 # 97 # 92 # 1003 # 1004 # 1005
-    calib = 0
+    obsid = 92 # 1301 # 97 # 92 # 1003 # 1004 # 1005
+    calib = 61
 
 # %%
 import pickle
 import pprint
 if calib>0:
-    with open(f"{obsid}_calibs.pickle", 'rb') as handle:
+    with open(f"outputs/{calib}_calibs.pickle", 'rb') as handle:
         cal = pickle.load(handle)
     pprint.pprint(cal)
 
@@ -176,14 +176,17 @@ key_to_order = { 27:0, 25:1, 23:2, 22:3, 20:4, 21:5, 26:6, 24:7 }
 
 # %%
 import gzip
-file_times = gzip.open(f"{obsid}_times.txt.gz", "wt")
-file_strings = gzip.open(f"{obsid}_strings_calib_{calib}.txt.gz", "wt")
+file_times = gzip.open(f"outputs/{obsid}_times.txt.gz", "wt")
+file_strings = gzip.open(f"outputs/{obsid}_strings_calib_{calib}.txt.gz", "wt")
 
 obsid_subarray,obsid_tel = get_files_for_obsid(obsid)
 
 f_tel = File(ft:=obsid_tel.pop(0))
 f_sub = File(fs:=obsid_subarray.pop(0))
 print(ft,fs)
+
+# 2.5ns spacing between deltaTs of TATS
+t_step = 2.5
 
 # In the SubarrayEvents, there is the trigger_ids, tel_ids.
 #  Run through those for an event, then go through the tels, to get the times.
@@ -195,6 +198,7 @@ tel_gen = f_tel.Triggers
 # Start with first telescope record
 tel = next(tel_gen)
 t0 = tel.trigger_time_s-1_000_000_000 # Make it a second earlier for margin
+sub_prev_trigger_time = t0
 
 tel_files = {}
 t_prevs = {}
@@ -220,6 +224,7 @@ while True:
     #print(sub)
     sub_tel_ids=sub.tel_ids
     sub_trigger_ids = sub.trigger_ids
+    sub_trigger_time = (sub.event_time_s-t0)*1_000_000_000 + sub.event_time_qns//4
     #print("Subarray tel_ids",sub_tel_ids)
     #print("Subarray trigger_ids",sub_trigger_ids)
     sub_times={}
@@ -240,7 +245,7 @@ while True:
             
             # Open file if not already open
             if tel_id not in tel_files:
-                tel_files[tel_id] = gzip.open(f"{obsid}_tel_{tel_id}.intervals.gz","wt")
+                tel_files[tel_id] = gzip.open(f"outputs/{obsid}_tel_{tel_id}.intervals.gz","wt")
                 t_prevs[tel_id] = 0
                 e_prevs[tel_id] = 0
 
@@ -316,6 +321,9 @@ while True:
     for key in sub_times.keys():
         sub_times[key] -= min_times
 
+    #if len(sub_times)==8:
+    #    break
+
     if calib>0:
         #print("===")
         #pprint.pprint(sub_times)
@@ -328,30 +336,66 @@ while True:
         print(sub_times)
     '''
 
-    trig_str = "........"
-    lts = list(trig_str)
+    times_str = "........"
+    lts = list(times_str)
     for key in sub_times.keys():
         lts[key_to_order[key]] = f"{sub_times[key]}"[-1]    
-    trig_str = "".join(lts)
-
-    #print(trig_str)
-    file_times.write(trig_str+"\n")
-
+    times_str = "".join(lts)
     
+    #print(trig_str)
+    file_times.write(times_str+"\n")
+
+    '''
     #chr(ord_a + np.array(list(sub_times.values()))//4)
     # +np.round((t4th_ns-min_time)/cnt_per_ns/clk_period).astype('int')
     trig_str = "........"
     lts = list(trig_str)
     for key in sub_times.keys():
-        t_step = 2.5
-        # 2.5ns spacing between deltaTs of TATS?
         lts[key_to_order[key]] = chr(ord_a + np.floor_divide(sub_times[key],t_step).astype('int'))  
     trig_str = "".join(lts)
-    
-    #print(trig_str)
-    file_strings.write(trig_str+"\n")
 
-    # Try doing calibration w.r.t. 0th channel
+    # Now, check if there is a better solution, by looking for minimum
+    nearest_grid_times = {}
+    sub_times_values = np.array(list(sub_times.values()))
+    rmsq_min = np.inf
+    for delta in np.linspace(-t_step/2,t_step/2,21):
+        grid = np.round((sub_times_values+delta)/t_step).astype('int')
+        grid_diff = sub_times_values-grid*t_step
+        rmsq = np.sqrt(np.sum(grid_diff**2))
+        if rmsq < rmsq_min:
+            rmsq_min, delta_min, grid_min = rmsq, delta, grid
+        elif rmsq == rmsq_min:
+            delta_min2 = delta
+    trig_str_min = "........"
+    ltsm = list(trig_str_min)
+    stv_keys = list(sub_times.keys())
+    for key,gm in zip(stv_keys,grid_min):
+        ltsm[key_to_order[key]] = chr(ord('a')+gm)
+    trig_str_min = "".join(ltsm)
+
+    if trig_str != trig_str_min:
+        if n_line<10000 or n_line%100_000==0:
+            if delta_min > 0 or delta_min2 < 0:
+                print("        >> minimum better than nearest:",trig_str_min,trig_str,"minimum from",delta_min,"--",delta_min2)
+        trig_str = trig_str_min
+
+    '''
+    
+    # Rounding tested to be the best solution
+    trig_str = "........"
+    lts = list(trig_str)
+    for key in sub_times.keys():
+        lts[key_to_order[key]] = chr(ord('a')+
+                                     np.round((sub_times[key])/t_step).astype('int'))
+    trig_str = "".join(lts)
+
+
+    dt = sub_trigger_time - sub_prev_trigger_time
+    #print(trig_str)
+    file_strings.write(trig_str+f" {dt}\n")
+    sub_prev_trigger_time = sub_trigger_time
+
+    # Try making the calibration w.r.t. 0th channel
     zeroth_chan = list(sub_times.keys())[0]
     if calib==0:
         if len(sub_times)==8:
@@ -369,13 +413,28 @@ while True:
     n_line += 1
 
 # %%
+obsid
 
 # %%
-import pickle
+sub_times[key]
+
+# %%
+key_to_order[key]
+
+# %%
+sub_times_values_reordered
+
+# %%
 if calib==0:
     cal = {k:v/n_calibs for k,v in calibs.items()}
     print(n_calibs,cal)
-    with open(f"{obsid}_calibs.pickle", 'wb') as handle:
+    with open(f"outputs/{obsid}_calibs.pickle", 'wb') as handle:
         pickle.dump(cal, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+# %%
+sub_times
+
+# %%
+key_to_order
 
 # %%
