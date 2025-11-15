@@ -69,7 +69,8 @@ from protozfits import File
 # %%
 files = glob(directory)
 files.sort()
-len(files),files[:10],files[-10:]
+print(f"Number of files found in directory {directory}:",len(files))
+files[:10],files[-10:]
 
 # %% [markdown]
 # ## Find the ObsIDs
@@ -123,7 +124,7 @@ len(f_sub.SubarrayEvents),len(f_tel.Triggers)
 
 # %%
 [(evt.event_id,evt.event_time_s,evt.event_time_qns//4,
-  np.array((evt.tel_ids,evt.trigger_ids)).T) for evt in list(f_sub.SubarrayEvents[5931:5951])]
+  np.array((evt.tel_ids_with_trigger,evt.trigger_ids)).T) for evt in list(f_sub.SubarrayEvents[5931:5951])]
 
 # %%
 [(20000+i,tel.tel_id,tel.trigger_id,tel.trigger_time_s,tel.trigger_time_qns//4) for i,tel in enumerate(list(f_tel.Triggers[20000:20100]))]
@@ -132,20 +133,23 @@ len(f_sub.SubarrayEvents),len(f_tel.Triggers)
 f_sub.SubarrayEvents[1],list(f_tel.Triggers[0:1010])
 
 # %%
+f_sub.SubarrayEvents[1].trigger_ids
+
+# %%
 if  hasattr(sys, 'ps1'):
     # Looking at outputs, SWAT takes some time to connect to all...
     f_tel = File(obsid_tel[0])
     f_sub = File(obsid_subarray[0])
-    prev_sub_tel_ids = []
+    prev_sub_tel_ids_with_trigger = []
     prev_s,prev_qns = 0,0
     for sub in f_sub.SubarrayEvents[:10000]:
-        if (len(sub.tel_ids) != len(prev_sub_tel_ids) or
-            set(sub.tel_ids) != set(prev_sub_tel_ids)):
-            print(sub.event_id,"Subarray tel_ids",sub.event_time_s,sub.event_time_qns,"time",sub.tel_ids)
-            differ = set(sub.tel_ids.astype(int))-set(prev_sub_tel_ids)
+        if (len(sub.tel_ids_with_trigger) != len(prev_sub_tel_ids_with_trigger) or
+            set(sub.tel_ids_with_trigger) != set(prev_sub_tel_ids_with_trigger)):
+            print(sub.event_id,"Subarray tel_ids",sub.event_time_s,sub.event_time_qns,"time",sub.tel_ids_with_trigger)
+            differ = set(sub.tel_ids_with_trigger.astype(int))-set(prev_sub_tel_ids_with_trigger)
             difftimes = (sub.event_time_s-prev_s)*1_000_000_000 + (sub.event_time_qns-prev_qns)//4
             print("  event difference", np.array(list(differ)),"times",difftimes)
-            prev_sub_tel_ids = sub.tel_ids.astype(int)
+            prev_sub_tel_ids_with_trigger = sub.tel_ids_with_trigger.astype(int)
         difftimes = (sub.event_time_s-prev_s)*1_000_000_000 + (sub.event_time_qns-prev_qns)//4
         print("  time difference",difftimes)
         prev_s,prev_qns = sub.event_time_s,sub.event_time_qns
@@ -227,14 +231,14 @@ while True:
         sub = next(sub_gen)        
     
     #print(sub)
-    sub_tel_ids=sub.tel_ids
+    sub_tel_ids_with_trigger=sub.tel_ids_with_trigger
     sub_trigger_ids = sub.trigger_ids
     sub_trigger_time = (sub.event_time_s-t0)*1_000_000_000 + sub.event_time_qns//4
-    #print("Subarray tel_ids",sub_tel_ids)
+    #print("Subarray tel_ids",sub_tel_ids_with_trigger)
     #print("Subarray trigger_ids",sub_trigger_ids)
     sub_times={}
 
-    tels = np.stack((sub_tel_ids,sub_trigger_ids)).T.tolist()
+    tels = np.stack((sub_tel_ids_with_trigger,sub_trigger_ids)).T.tolist()
 
     #print("tels",tels)
     
@@ -274,8 +278,8 @@ while True:
         # Could have a tel which has an event number higher than the subarray
         # => need to skip to the next subarray???
         # But without moving forward in the telescope file
-        if tel.tel_id in sub.tel_ids:
-            if tel.trigger_id > sub_trigger_ids[np.argwhere(sub_tel_ids==tel.tel_id)[0,0]]:
+        if tel.tel_id in sub.tel_ids_with_trigger:
+            if tel.trigger_id > sub_trigger_ids[np.argwhere(sub_tel_ids_with_trigger==tel.tel_id)[0,0]]:
                 #print(20*"v"+" TRIGGER AFTER SUB-ARRAY ??? "+20*"v")
                 #file_strings.write(20*"v"+" TRIGGER AFTER SUB-ARRAY ??? "+20*"v"+"\n")
                 continue
