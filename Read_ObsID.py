@@ -28,7 +28,10 @@ if  not hasattr(sys, 'ps1'):
     
     parser.add_argument('-o', '--obs-id', help="Observation ID to read")
     parser.add_argument('-c', '--calib', default=0, type=int, help="Apply calibration pickle file with name {calib}_calibs.pickle\n"
-                                                                   "Default 0, to make calibration file from events with all telescopes hit")
+                                                                   "  Default 0, to make calibration file from events with all telescopes hit")
+    parser.add_argument('-d', '--directory', default="./triggers/2025/06/0*/*", help="Directory in which to look for files (usually of form triggers/yyyy/mm/dd/)\n"
+                                                                                     "  Uses glob, so *s accepted, if argument in quotes")
+    
     args = parser.parse_args()
 
     if args.obs_id:
@@ -38,10 +41,12 @@ if  not hasattr(sys, 'ps1'):
         sys.exit()
     
     calib = args.calib
+    directory = args.directory
 
 else:
     obsid = 92 # 1301 # 97 # 92 # 1003 # 1004 # 1005
     calib = 61
+    directory = "./triggers/2025/06/0*/*"
 
 # %%
 import pickle
@@ -62,7 +67,7 @@ import re
 from protozfits import File
 
 # %%
-files = glob("triggers/2025/06/0*/*")
+files = glob(directory)
 files.sort()
 len(files),files[:10],files[-10:]
 
@@ -76,7 +81,7 @@ pattern = re.compile(r".+OBSID([0-9]+).+")
 
 obsids = [int(pattern.findall(file)[0]) for file in files]
 obsids = sorted(list(set(obsids)))
-obsids
+print(f"ObsIDs available in directory {directory}:\n",obsids)
 
 
 # %% [markdown]
