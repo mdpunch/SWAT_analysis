@@ -34,6 +34,12 @@ For example, this gives:
 key_to_order = { 27:0, 25:1, 23:2, 22:3, 20:4, 21:5, 26:6, 24:7 }
 ```
 
+Use `-k` option on the command line to give this order, or make a file "key_to_order.txt" with the dictionary in it (as string).
+(command line option takes priority), e.g.
+```
+python Read_ObsID.py -o 92 -d "triggers/2025/*/*/*" -k "{ 27:0, 25:1, 23:2, 22:3, 20:4, 21:5, 26:6, 24:7 }" 
+```
+
 *Note:* The calibration from one obs_id was applied to another obs_id with simultaneous telescopes, to check that the calibration was working!  But, the calibrations above are too small to make a difference, given the 2.5ns step of the TATS.
  
 

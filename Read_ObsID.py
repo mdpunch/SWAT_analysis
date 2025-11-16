@@ -21,16 +21,21 @@
 # 61,71,81 is all a's, but high rate and few?
 
 import sys
+import ast
+
+default_keyorder = { 27:0, 25:1, 23:2, 22:3, 20:4, 21:5, 26:6, 24:7 }
+
 if  not hasattr(sys, 'ps1'):
 
     import argparse
     parser = argparse.ArgumentParser("Read the SWAT file and produce outputs")
     
     parser.add_argument('-o', '--obs-id', help="Observation ID to read")
-    parser.add_argument('-c', '--calib', default=0, type=int, help="Apply calibration pickle file with name {calib}_calibs.pickle\n"
-                                                                   "  Default 0, to make calibration file from events with all telescopes hit")
-    parser.add_argument('-d', '--directory', default="./triggers/2025/06/0*/*", help="Directory in which to look for files (usually of form triggers/yyyy/mm/dd/)\n"
-                                                                                     "  Uses glob, so *s accepted, if argument in quotes")
+    parser.add_argument('-c', '--calib', default=0, type=int, help="Apply calibration pickle file with name {calib}_calibs.pickle.\n"
+                                                                   "  Default 0, to make calibration file from events with all telescopes hit.")
+    parser.add_argument('-d', '--directory', default="./triggers/2025/06/0*/*", help="Directory in which to look for files (usually of form triggers/yyyy/mm/dd/).\n"
+                                                                                     "  Uses glob, so *s accepted, if argument in quotes.")
+    parser.add_argument('-k', '--keyorder', default="",help=f"Dictionary (as string) of the order of the tels in the TATS string.  e.g. {str(default_keyorder)}. Looks in file \"key_to_order.txt\" if not, or defaults this.")
     
     args = parser.parse_args()
 
@@ -42,11 +47,41 @@ if  not hasattr(sys, 'ps1'):
     
     calib = args.calib
     directory = args.directory
+    if len(args.keyorder) == 0: # No keyprder provided on command line, try for file, and if no file default to default
+        try:
+            with open("key_to_order.txt", "r") as key_to_order_file:
+                file_key_to_order = key_to_order_file.readline()
+        except:
+            print(f"No keyOrder file \"key_to_order.txt\", using default {str(default_keyorder)}.")
+            key_to_order = default_keyorder
+        else:
+            try:
+                key_to_order = ast.literal_eval(file_key_to_order)
+            except:
+                print("Error interpreting keyOrder string from \"key_to_order.txt\" as a dictionary:",file_key_to_order)
+                print("Exiting...")
+                sys.exit()
+            print(f"Using keyOrder string from \"key_to_order.txt\" as a dictionary: {key_to_order}")
+
+    else:
+        try:
+            key_to_order = ast.literal_eval(args.keyorder)
+        except:
+            print("Error interpreting keyOrder string argument as a dictionary:",args.keyorder)
+            print("Exiting...")
+            sys.exit()
+    
 
 else:
     obsid = 92 # 1301 # 97 # 92 # 1003 # 1004 # 1005
     calib = 61
     directory = "./triggers/2025/06/0*/*"
+    key_to_order = default_keyorder
+
+if len(key_to_order) != 8:
+    print("Not enough channels in keyOrder dictionary",key_to_order)
+    print("Exiting...")
+    sys.exit()
 
 # %%
 import pickle
@@ -175,7 +210,7 @@ obsids
 #   0,  1,  2,  3,  4,  5,  6,  7
 #  27, 25, 23, 22, 20, 21, 26, 24
 
-key_to_order = { 27:0, 25:1, 23:2, 22:3, 20:4, 21:5, 26:6, 24:7 }
+#key_to_order = { 27:0, 25:1, 23:2, 22:3, 20:4, 21:5, 26:6, 24:7 }
 
 
 # MP revised version with test remotely, 20250701 ... not correct for files taken!!!
