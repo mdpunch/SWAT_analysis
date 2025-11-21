@@ -219,29 +219,137 @@ obsids
 
 
 # %%
+## DEPRECATED ... DRY
+def get_next_tel_trigger(obsid_tel):
+    ''' get next telescope from list of triggers files
+
+    obsid_tel: list of telescope trigger files
+        
+    returns tel
+    '''
+
+    
+    # Loop over files
+    while True:
+        
+        try:
+            ft = obsid_tel.pop(0)
+        except IndexError:
+            # No more telescope files
+            return # bare return equivalent to StopIteration
+        
+        f_tel = File(ft)
+
+        tel_gen = f_tel.Triggers
+        
+        # Loop over triggers in files
+        while True:
+            try:
+                tel = next(tel_gen)
+                yield tel
+            except StopIteration:
+                f_tel.close()
+                break 
+
+
+# %%
+## DEPRECATED ... DRY
+def get_next_subarray_event(obsid_sub):
+    ''' get next subarray events from list of subarray files
+
+    obsid_sub: list of subarray events files
+        
+    returns sub
+    '''
+
+    
+    # Loop over files
+    while True:
+        
+        try:
+            ft = obsid_sub.pop(0)
+        except IndexError:
+            # No more subarray files
+            return # bare return equivalent to StopIteration
+        
+        f_sub = File(fs)
+
+        sub_gen = f_sub.SubarrayEvents
+        
+        # Loop over subarray events in files
+        while True:
+            try:
+                sub = next(sub_gen)
+                yield sub
+            except StopIteration:
+                f_sub.close()
+                break
+
+
+# %%
+def get_next_record(filelist,thing_name):
+    ''' get next thing in record from list of files
+
+    filelist:    
+        list of files
+    thing_name:  
+        attribute to get from the object (string)
+        
+    returns the thing
+    '''
+
+    
+    # Loop over files
+    while True:
+        
+        try:
+            filename = filelist.pop(0)
+        except IndexError:
+            # No more subarray files
+            return # bare return equivalent to StopIteration
+        
+        file_handle = File(filename)
+        print("Opened",filename)
+
+        thing_gen = getattr(file_handle,thing_name)
+        
+        # Loop over records in files
+        while True:
+            try:
+                thing = next(thing_gen)
+                yield thing
+            except StopIteration:                
+                file_handle.close()
+                break
+
+
+# %%
+import copy
+
+# %%
 import gzip
 file_times = gzip.open(f"outputs/{obsid}_times.txt.gz", "wt")
 file_strings = gzip.open(f"outputs/{obsid}_strings_calib_{calib}.txt.gz", "wt")
 
 obsid_subarray,obsid_tel = get_files_for_obsid(obsid)
 
-f_tel = File(ft:=obsid_tel.pop(0))
-f_sub = File(fs:=obsid_subarray.pop(0))
-print(ft,fs)
+#get_next_subarray_event_gen = get_next_subarray_event(obsid_subarray)
+get_next_subarray_event_gen = get_next_record(obsid_subarray,"SubarrayEvents")
+
+#get_next_tel_trigger_gen = get_next_tel_trigger(obsid_tel)
+get_next_tel_trigger_gen = get_next_record(obsid_tel,"Triggers")
 
 # 2.5ns spacing between deltaTs of TATS
 t_step = 2.5
 
 # In the SubarrayEvents, there is the trigger_ids, tel_ids.
-#  Run through those for an event, then go through the tels, to get the times.
+#  Run through those for an event, then go through the tels_in_sub, to get the times.
 
 n_line = 0
-sub_gen = f_sub.SubarrayEvents
-tel_gen = f_tel.Triggers
 
 # Start with first telescope record
-tel = next(tel_gen)
-t0 = tel.trigger_time_s-1_000_000_000 # Make it a second earlier for margin
+#tel = next(get_next_tel_trigger_gen)
+t0 = 0
 sub_prev_trigger_time = t0
 
 tel_files = {}
@@ -252,20 +360,16 @@ n_calibs = 0
 calibs = {}
 
 #for sub in f_sub.SubarrayEvents:
+
+# Loop over subarray events
+count = 0
 while True:
-    try:
-        sub = next(sub_gen)
-    except StopIteration:
-        f_sub.close()
-        if len(obsid_subarray) == 0:
-            break # No more subarray files
-        next_subarray = obsid_subarray.pop(0)
-        print("Nextsubarray file:",next_subarray)
-        f_sub = File(next_subarray)
-        sub_gen = f_sub.SubarrayEvents
-        sub = next(sub_gen)        
     
-    #print(sub)
+    try:
+        sub = next(get_next_subarray_event_gen)
+    except StopIteration:
+        break
+
     sub_tel_ids_with_trigger=sub.tel_ids_with_trigger
     sub_trigger_ids = sub.trigger_ids
     sub_trigger_time = (sub.event_time_s-t0)*1_000_000_000 + sub.event_time_qns//4
@@ -273,18 +377,30 @@ while True:
     #print("Subarray trigger_ids",sub_trigger_ids)
     sub_times={}
 
-    tels = np.stack((sub_tel_ids_with_trigger,sub_trigger_ids)).T.tolist()
+    # Make a list of the telescopes with trigger in the subarray for this event, 
+    #    and their trigger IDs for this event.
+    tels_in_sub = np.stack((sub_tel_ids_with_trigger,sub_trigger_ids)).T.tolist()
 
-    #print("tels",tels)
+    #print(len(tels_in_sub),"tels_in_sub",tels_in_sub)
     
-    while len(tels):
+    # Run through the telescope trigger file and 
+    # search for the corresponding tel/trigger_id in the telescope triggers file
+    # Fill the trigger corresponding times, until all tels in subarray found
+    
+    while tel := next(get_next_tel_trigger_gen):
+        
+        count += 1
+        #if count>5000000:
+        #    break
+        #print(count,end=" ")
+        
+        # Start with the current tel/trigger_id in the telescope triggers file
         tel_id = tel.tel_id
         tel_idx = [tel.tel_id,tel.trigger_id]
-
     
         #print("***",tel_idx)
     
-        if tel_idx in tels:
+        if tel_idx in tels_in_sub:
             #print("found tel_idx",tel_idx)
             
             # Open file if not already open
@@ -305,48 +421,30 @@ while True:
             t_prevs[tel_id] = t_now_ns
             e_prevs[tel_id] = e_now
             
-            tels.remove(tel_idx)
+            tels_in_sub.remove(tel_idx)
             sub_times[tel.tel_id] = (tel.trigger_time_s-t0)*4_000_000_000+tel.trigger_time_qns
 
-            continue
+            # Note: if len(tels_in_sub) is now zero, we exit the loop,
+            #   treat the subarray_times and then search for the next subarray event.
+            if len(tels_in_sub) == 0:
+                break
 
-        # Could have a tel which has an event number higher than the subarray
-        # => need to skip to the next subarray???
-        # But without moving forward in the telescope file
-        if tel.tel_id in sub.tel_ids_with_trigger:
-            if tel.trigger_id > sub_trigger_ids[np.argwhere(sub_tel_ids_with_trigger==tel.tel_id)[0,0]]:
-                #print(20*"v"+" TRIGGER AFTER SUB-ARRAY ??? "+20*"v")
-                #file_strings.write(20*"v"+" TRIGGER AFTER SUB-ARRAY ??? "+20*"v"+"\n")
-                continue
-        else:
-            #print(20*">"+" NON-COINCIDENT EVENT ??? "+20*">")
-            #file_strings.write(20*">"+" NON-COINCIDENT EVENT ??? "+20*">"+"\n")
-            # Are these at the same time as a missing packet?
-            pass
+            # Add a check that there isn't something crazy going on.
+            # If a telescope trigger is missing, then what?
 
-        #print(">>>",tel_idx,tel.trigger_time_s,tel.trigger_time_qns)
-
-        try:
-            tel = next(tel_gen)
-        except StopIteration:
-            f_tel.close()
-            if len(obsid_tel) == 0:
-                break # No more telescope files
-            next_tel = obsid_tel.pop(0)
-            print("Next telescope file:",next_tel)
-            f_tel = File(next_tel)
-            tel_gen = f_tel.Triggers
-            tel = next(tel_gen)
-
+    # convert from quarter_ns to ns
+    sub_times = {k:v//4 for k,v in sub_times.items()}
     # Sort by channel
     sub_times = dict(sorted(sub_times.items()))
+    # Backup for debug print
+    sub_times_raw = copy.copy(sub_times)
     
     
-    # get differences and convert from quarter_ns to ns
+    # get differences
     min_times = min(sub_times.values())
     for key in sub_times.keys():
         sub_times[key] -= min_times
-        sub_times[key] //= 4
+        #sub_times[key] //= 4
     #print(sub_times)
 
     min_chan = min(sub_times, key=sub_times.get)
@@ -374,11 +472,10 @@ while True:
         pass
 
     
-    '''
-    if max(sub_times.values())>9:
-        print("... FAR DISTANT DELTA_T ...")
-        print(sub_times)
-    '''
+    #if max(sub_times.values())>9:
+    #    print("... FAR DISTANT DELTA_T ...")
+    #    print(sub_times)
+    
 
     times_str = "........"
     lts = list(times_str)
@@ -436,7 +533,7 @@ while True:
 
     dt = sub_trigger_time - sub_prev_trigger_time
     #print(trig_str)
-    file_strings.write(trig_str+f" {dt}\n")
+    file_strings.write(trig_str+f" {dt:10d}    "+str(sub_times_raw)+"\n")
     sub_prev_trigger_time = sub_trigger_time
 
     # Try making the calibration w.r.t. 0th channel
@@ -446,7 +543,7 @@ while True:
             for key in sub_times.keys():
                 calibs[key] = calibs.get(key, 0) + sub_times[key]-sub_times[zeroth_chan]
             n_calibs += 1
-    
+        
     if n_line<10000:
         print(trig_str)
     elif n_line%100_000==0:
@@ -457,28 +554,10 @@ while True:
     n_line += 1
 
 # %%
-obsid
-
-# %%
-sub_times[key]
-
-# %%
-key_to_order[key]
-
-# %%
-sub_times_values_reordered
-
-# %%
 if calib==0:
     cal = {k:v/n_calibs for k,v in calibs.items()}
     print(n_calibs,cal)
     with open(f"outputs/{obsid}_calibs.pickle", 'wb') as handle:
         pickle.dump(cal, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-# %%
-sub_times
-
-# %%
-key_to_order
 
 # %%
